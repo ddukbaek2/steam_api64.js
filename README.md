@@ -4,7 +4,7 @@
 
 **스팀 SDK(steam_api64.dll)를 koffi 로 직접 부르는 Node.js, Electron 모듈**
 
-[![version](https://img.shields.io/badge/version-0.1.0-d4b06a?style=flat-square)](UPDATE.md)
+[![version](https://img.shields.io/badge/version-0.1.1-d4b06a?style=flat-square)](UPDATE.md)
 [![license](https://img.shields.io/badge/license-MIT-3f3f46?style=flat-square)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-Windows%20x64-3f3f46?style=flat-square)](#요구-사항)
 [![dependencies](https://img.shields.io/badge/dependencies-koffi-3f3f46?style=flat-square)](package.json)
@@ -45,7 +45,7 @@ npm install github:ddukbaek2/steam_api64.js#release
 판을 고정하려면 태그를 씁니다.
 
 ```bash
-npm install github:ddukbaek2/steam_api64.js#v0.1.0
+npm install github:ddukbaek2/steam_api64.js#v0.1.1
 ```
 
 git 서브모듈로 넣어 쓸 수도 있습니다. 그때는 쓰는 쪽에 `koffi` 를 설치합니다.
@@ -133,11 +133,10 @@ if (inputState !== null && inputState.pressed.confirm === true) {
 }
 ```
 
-스팀웍스 설정도 함께 바꿉니다.
+**스팀웍스의 Steam Input 설정은 바꾸지 않아도 됩니다.** `startInput` 이 실행 중에 동작 정의 파일을 스팀에 알리고(`SetInputActionManifestFilePath`), 스팀은 그 파일이 가리키는 공식 배치를 씁니다. 스팀웍스의 기본 컨트롤러 구성을 "게임패드" 템플릿으로 둔 채 스팀덱(Proton)에서 십자키와 A, B 가 이 모듈로 들어오는 것을 확인했습니다. (찾았다, 2026-10-11)
 
-1. 스팀웍스 설정 편집 → 애플리케이션 → Steam Input
-2. **Steam Input 기본 컨트롤러 구성**: 사용자 지정 구성(게임과 함께 제공), 경로는 게임 폴더 기준 `steam_input/actions.vdf`
-3. 컨트롤러별 Steam Input 사용 칸(Xbox, PlayStation 들)은 비워 두면, PC 의 그 패드는 스팀을 거치지 않고 게임이 직접 읽습니다. 그 패드는 이 모듈로 들어오지 않으니 브라우저의 게임패드 읽기와 함께 씁니다
+- 컨트롤러별 Steam Input 사용 칸(Xbox, PlayStation 들)을 비워 두면, PC 의 그 패드는 스팀을 거치지 않고 게임이 직접 읽습니다. 그 패드는 이 모듈로 들어오지 않으니 브라우저의 게임패드 읽기와 함께 씁니다
+- 스팀웍스의 "사용자 지정 구성(게임과 함께 제공)" 으로 같은 파일을 미리 알려 둘 수도 있습니다. 꼭 필요하지는 않습니다
 
 알아 둘 것:
 
@@ -180,7 +179,7 @@ electron-builder 를 쓰면 이렇게 둡니다.
 ## 브랜치와 판
 
 - `dev`: 만드는 곳. (기본 브랜치)
-- `release`: 내보낸 판만 올립니다. 판마다 `v0.1.0` 같은 태그를 붙이고 [업데이트 기록](UPDATE.md)에 적습니다.
+- `release`: 내보낸 판만 올립니다. 판마다 `v0.1.1` 같은 태그를 붙이고 [업데이트 기록](UPDATE.md)에 적습니다.
 
 ## 라이선스
 

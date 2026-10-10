@@ -1,6 +1,6 @@
 {
 	"name": "steam_api64.js",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "스팀 SDK(steam_api64.dll)를 koffi 로 직접 부르는 Node.js, Electron 모듈. 오버레이 신호와 Steam Input 동작까지 받습니다.",
 	"main": "steam_api64.js",
 	"files": [
