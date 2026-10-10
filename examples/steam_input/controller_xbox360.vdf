@@ -1,0 +1,186 @@
+"controller_mappings"
+{
+	"version"		"3"
+	"revision"		"1"
+	"title"		"#Title"
+	"description"		"#Description"
+	"controller_type"		"controller_xbox360"
+	"major_revision"		"0"
+	"minor_revision"		"0"
+	"actions"
+	{
+		"InGame"
+		{
+			"title"		"#Set_InGame"
+			"legacy_set"		"0"
+			"Button"
+			{
+				"up"		"#Action_Up"
+				"down"		"#Action_Down"
+				"left"		"#Action_Left"
+				"right"		"#Action_Right"
+				"confirm"		"#Action_Confirm"
+				"cancel"		"#Action_Cancel"
+			}
+		}
+	}
+	"action_layers"
+	{
+	}
+	"localization"
+	{
+		"english"
+		{
+			"Title"		"Example Game"
+			"Description"		"D-pad to move, bottom face button to confirm, right face button to cancel or open the menu."
+			"Set_InGame"		"Game"
+			"Action_Up"		"Up"
+			"Action_Down"		"Down"
+			"Action_Left"		"Left"
+			"Action_Right"		"Right"
+			"Action_Confirm"		"Confirm"
+			"Action_Cancel"		"Cancel / Menu"
+		}
+		"koreana"
+		{
+			"Title"		"예제 게임"
+			"Description"		"십자키로 움직이고, 아래 단추는 확인, 오른쪽 단추는 취소와 메뉴입니다."
+			"Set_InGame"		"게임"
+			"Action_Up"		"위"
+			"Action_Down"		"아래"
+			"Action_Left"		"왼쪽"
+			"Action_Right"		"오른쪽"
+			"Action_Confirm"		"확인"
+			"Action_Cancel"		"취소, 메뉴"
+		}
+	}
+	"group"
+	{
+		"id"		"0"
+		"mode"		"four_buttons"
+		"name"		""
+		"description"		""
+		"inputs"
+		{
+			"button_a"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"game_action InGame confirm, , "
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"button_b"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"game_action InGame cancel, , "
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+		}
+	}
+	"group"
+	{
+		"id"		"1"
+		"mode"		"dpad"
+		"name"		""
+		"description"		""
+		"inputs"
+		{
+			"dpad_north"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"game_action InGame up, , "
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"dpad_south"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"game_action InGame down, , "
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"dpad_east"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"game_action InGame right, , "
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"dpad_west"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"game_action InGame left, , "
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+		}
+	}
+	"preset"
+	{
+		"id"		"0"
+		"name"		"InGame"
+		"group_source_bindings"
+		{
+			"0"		"button_diamond active"
+			"1"		"dpad active"
+		}
+	}
+	"settings"
+	{
+	}
+}

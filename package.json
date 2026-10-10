@@ -1,0 +1,38 @@
+{
+	"name": "steam_api64.js",
+	"version": "0.1.0",
+	"description": "스팀 SDK(steam_api64.dll)를 koffi 로 직접 부르는 Node.js, Electron 모듈. 오버레이 신호와 Steam Input 동작까지 받습니다.",
+	"main": "steam_api64.js",
+	"files": [
+		"steam_api64.js",
+		"README.md",
+		"UPDATE.md",
+		"LICENSE"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ddukbaek2/steam_api64.js.git"
+	},
+	"keywords": [
+		"steam",
+		"steamworks",
+		"steam-input",
+		"steam-deck",
+		"electron",
+		"koffi"
+	],
+	"author": "ddukbaek2",
+	"license": "MIT",
+	"os": [
+		"win32"
+	],
+	"cpu": [
+		"x64"
+	],
+	"engines": {
+		"node": ">=16"
+	},
+	"dependencies": {
+		"koffi": "^3.3.3"
+	}
+}

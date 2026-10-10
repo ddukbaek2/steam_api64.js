@@ -1,0 +1,4 @@
+node_modules/
+package-lock.json
+# 스팀 SDK 의 재배포 파일은 밸브 약관상 게임과 함께만 배포합니다. 리포에 넣지 않습니다.
+steam_api64.dll

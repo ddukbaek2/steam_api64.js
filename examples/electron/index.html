@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<title>steam_api64.js 예제</title>
+</head>
+<body>
+	<pre id="state">스팀에 붙지 않았습니다.</pre>
+	<script>
+		const stateElement = document.getElementById("state");
+		const bridge = window.steamBridge;
+		if (bridge !== undefined) {
+			bridge.addOverlayListener((isActive) => {
+				console.log("오버레이", isActive);
+			});
+			const showState = () => {
+				const padState = bridge.readPadState();
+				stateElement.textContent = "게임 언어: " + bridge.getGameLanguage() + "\n패드: " + JSON.stringify(padState);
+				requestAnimationFrame(showState);
+			};
+			showState();
+		}
+	</script>
+</body>
+</html>
