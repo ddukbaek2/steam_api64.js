@@ -4,7 +4,7 @@
 
 **스팀 SDK(steam_api64.dll)를 koffi 로 직접 부르는 Node.js, Electron 모듈**
 
-[![version](https://img.shields.io/badge/version-0.1.1-d4b06a?style=flat-square)](UPDATE.md)
+[![version](https://img.shields.io/badge/version-0.1.2-d4b06a?style=flat-square)](UPDATE.md)
 [![license](https://img.shields.io/badge/license-MIT-3f3f46?style=flat-square)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-Windows%20x64-3f3f46?style=flat-square)](#요구-사항)
 [![dependencies](https://img.shields.io/badge/dependencies-koffi-3f3f46?style=flat-square)](package.json)
@@ -33,7 +33,7 @@ steam_api64.js 는 스팀 SDK 의 C 함수(flat API)를 [koffi](https://koffi.de
 - Node.js 16 이상, 또는 Electron (메인 프로세스)
 - 스팀웍스 SDK 의 `redistributable_bin/win64/steam_api64.dll`
   - 이 리포에는 들어 있지 않습니다. 밸브의 약관상 재배포 파일은 게임과 함께만 배포합니다. [스팀웍스 파트너 사이트](https://partner.steamgames.com/downloads/list)에서 SDK 를 받아 꺼내 씁니다.
-  - 시험한 판은 SDK 1.58 ~ 1.60 입니다. (`ISteamApps` v008, `ISteamUserStats` v012, `ISteamRemoteStorage` v016, `ISteamInput` v006) 인터페이스 판이 다른 SDK 의 DLL 은 함수 이름이 달라 읽지 못합니다.
+  - 시험한 판은 SDK 1.58 ~ 1.60 입니다. (`ISteamApps` v008, `ISteamUtils` v010, `ISteamUserStats` v012, `ISteamRemoteStorage` v016, `ISteamInput` v006) 인터페이스 판이 다른 SDK 의 DLL 은 함수 이름이 달라 읽지 못합니다.
 - 스팀 클라이언트가 켜져 있어야 붙습니다.
 
 ## 설치
@@ -45,7 +45,7 @@ npm install github:ddukbaek2/steam_api64.js#release
 판을 고정하려면 태그를 씁니다.
 
 ```bash
-npm install github:ddukbaek2/steam_api64.js#v0.1.1
+npm install github:ddukbaek2/steam_api64.js#v0.1.2
 ```
 
 git 서브모듈로 넣어 쓸 수도 있습니다. 그때는 쓰는 쪽에 `koffi` 를 설치합니다.
@@ -65,6 +65,7 @@ const steamApi = require("steam_api64.js");
 steamApi.initSteam(480, path.join(__dirname, "steam_api64.dll"));
 
 console.log(steamApi.readGameLanguage());   // "koreana", "english" 같은 것
+console.log(steamApi.readSteamUiLanguage());   // 스팀 클라이언트의 언어
 
 steamApi.setOverlayListener((isActive) => {
 	console.log(isActive ? "오버레이 열림" : "오버레이 닫힘");
@@ -106,6 +107,7 @@ steamApi.enableElectronOverlay(app);
 | `runSteamFrame()` | 스팀 신호를 꺼내 나눠 주고 놓아 줍니다. 자주 부릅니다 |
 | `setOverlayListener(listener)` | 오버레이가 열리고 닫힐 때 부를 것. (`true` 면 열림) |
 | `readGameLanguage()` | 스팀이 정한 게임 언어. (스팀 API 의 언어 코드) |
+| `readSteamUiLanguage()` | 스팀 화면 언어. 사용자가 스팀 클라이언트에 고른 언어이고, 스팀덱은 기기 설정의 언어입니다. (스팀 API 의 언어 코드) |
 | `unlockAchievement(id)` | 업적을 열고 스팀에 올립니다. 스팀이 아직 지금 값을 보내 주지 않았으면 `false` 이고, 다시 청해 둡니다 |
 | `isCloudEnabled()` | 사용자 계정과 이 앱의 스팀 클라우드가 둘 다 켜져 있는지 |
 | `readCloudFile(name)` | 스팀 클라우드의 파일을 UTF-8 글로 읽습니다. (없으면 `null`) |

@@ -8,7 +8,7 @@
 //   스팀이 만든 가상 패드를 보지 못해, 이 길이 아니면 덱의 단추가 게임에 오지 않습니다.
 // 창과 IPC 는 부르는 쪽이 맡습니다. Electron 에서 오버레이를 켜는 일만 enableElectronOverlay 로 함께 둡니다.
 // 시험한 SDK: Steamworks SDK 1.58 ~ 1.60 의 steam_api64.dll
-// (ISteamApps v008, ISteamUserStats v012, ISteamRemoteStorage v016, ISteamInput v006)
+// (ISteamApps v008, ISteamUtils v010, ISteamUserStats v012, ISteamRemoteStorage v016, ISteamInput v006)
 //==============================================================================
 "use strict";
 
@@ -29,6 +29,7 @@ let koffi = null;
 let steamFunctions = null;
 let steamPipe = 0;
 let appsInterface = null;
+let utilsInterface = null;
 let userStatsInterface = null;
 let remoteStorageInterface = null;
 let inputInterface = null;
@@ -68,6 +69,8 @@ function declareSteamFunctions(steamLibrary) {
 		manualDispatchFreeLastCallback: steamLibrary.func("void SteamAPI_ManualDispatch_FreeLastCallback(int32_t steamPipe)"),
 		apps: steamLibrary.func("void *SteamAPI_SteamApps_v008()"),
 		getCurrentGameLanguage: steamLibrary.func("const char *SteamAPI_ISteamApps_GetCurrentGameLanguage(void *self)"),
+		utils: steamLibrary.func("void *SteamAPI_SteamUtils_v010()"),
+		getSteamUILanguage: steamLibrary.func("const char *SteamAPI_ISteamUtils_GetSteamUILanguage(void *self)"),
 		userStats: steamLibrary.func("void *SteamAPI_SteamUserStats_v012()"),
 		requestCurrentStats: steamLibrary.func("bool SteamAPI_ISteamUserStats_RequestCurrentStats(void *self)"),
 		setAchievement: steamLibrary.func("bool SteamAPI_ISteamUserStats_SetAchievement(void *self, const char *name)"),
@@ -122,6 +125,7 @@ function initSteam(appId, libraryPath) {
 	steamFunctions = functions;
 	steamPipe = functions.getSteamPipe();
 	appsInterface = functions.apps();
+	utilsInterface = functions.utils();
 	userStatsInterface = functions.userStats();
 	remoteStorageInterface = functions.remoteStorage();
 	// 업적은 스팀이 지금 값을 보내 준 뒤에야 바꿀 수 있습니다. (이 SDK 판은 직접 청해야 합니다)
@@ -190,6 +194,24 @@ function readGameLanguage() {
 	}
 	const gameLanguage = steamFunctions.getCurrentGameLanguage(appsInterface);
 	return typeof gameLanguage === "string" ? gameLanguage : "";
+}
+
+
+//==============================================================================
+// 스팀 화면 언어. (스팀 API 의 언어 코드)
+//
+// 사용자가 스팀 클라이언트에 고른 언어입니다. 스팀덱은 기기 설정의 언어가 이 값입니다.
+// 게임 언어(readGameLanguage)는 게임마다 속성에서 고르는 값이라 이것과 다를 수 있습니다.
+//==============================================================================
+/**
+ * @returns { string }
+ */
+function readSteamUiLanguage() {
+	if (steamFunctions === null) {
+		return "";
+	}
+	const steamUiLanguage = steamFunctions.getSteamUILanguage(utilsInterface);
+	return typeof steamUiLanguage === "string" ? steamUiLanguage : "";
 }
 
 
@@ -412,6 +434,7 @@ module.exports = {
 	runSteamFrame,
 	setOverlayListener,
 	readGameLanguage,
+	readSteamUiLanguage,
 	unlockAchievement,
 	isCloudEnabled,
 	readCloudFile,
