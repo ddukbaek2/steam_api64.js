@@ -112,8 +112,8 @@ steamApi.enableElectronOverlay(app);
 | `isCloudEnabled()` | 사용자 계정과 이 앱의 스팀 클라우드가 둘 다 켜져 있는지 |
 | `readCloudFile(name)` | 스팀 클라우드의 파일을 UTF-8 글로 읽습니다. (없으면 `null`) |
 | `writeCloudFile(name, text)` | 스팀 클라우드에 UTF-8 글을 씁니다. (썼는지) |
-| `startInput(manifestPath, actionSetName, actionNames)` | Steam Input 을 시작하고 동작 정의 파일을 알립니다 |
-| `readInputState()` | 지금 눌린 동작. `{ pressed: { 동작 이름: true }, isPlayStation }` (시작하지 않았으면 `null`) |
+| `startInput(manifestPath, actionSetName, actionNames, analogActionNames)` | Steam Input 을 시작하고 동작 정의 파일을 알립니다. 아날로그 동작 이름은 넣지 않아도 됩니다 |
+| `readInputState()` | 지금 눌린 동작과 아날로그 동작의 값. `{ pressed: { 동작 이름: true }, analog: { 동작 이름: { x, y } }, isPlayStation }` (시작하지 않았으면 `null`) |
 | `enableElectronOverlay(app)` | Electron 에서 오버레이 켜기. (앱이 준비되기 전) |
 
 ## Steam Input
@@ -144,7 +144,53 @@ if (inputState !== null && inputState.pressed.confirm === true) {
 
 - 동작 번호는 Steam Input 을 거치는 패드가 붙어 스팀이 구성을 읽은 뒤에야 나옵니다. 그 전에는 0 이라 `readInputState()` 가 매 프레임 다시 묻습니다. 패드가 없으면 `pressed` 는 늘 비어 있습니다.
 - 입력 갱신(`RunFrame`)은 `readInputState()` 가 직접 부릅니다. (`ISteamInput::Init(true)`)
-- `isPlayStation` 은 누르고 있는 패드가 PS3, PS4, PS5 패드인지입니다. 화면의 단추 안내를 ✕ ○ 로 바꾸는 데 씁니다.
+- `isPlayStation` 은 쓰고 있는 패드(단추를 누르거나 스틱을 기울인 패드)가 PS3, PS4, PS5 패드인지입니다. 화면의 단추 안내를 ✕ ○ 로 바꾸는 데 씁니다.
+
+### 아날로그 동작 (스틱, 트랙패드)
+
+이동, 조준처럼 스틱으로 받는 것은 아날로그 동작입니다. 동작 정의 파일의 동작 묶음에 `StickPadGyro` 로 두고, 패드의 배치 파일에서 그 스틱의 그룹을 `joystick_move` 로 두어 동작에 잇습니다.
+
+```
+"InGame"
+{
+	"title"		"#Set_InGame"
+	"StickPadGyro"
+	{
+		"move"
+		{
+			"title"		"#Action_Move"
+			"input_mode"		"joystick_move"
+		}
+	}
+}
+```
+
+```
+"group"
+{
+	"id"		"3"
+	"mode"		"joystick_move"
+	"inputs"
+	{
+	}
+	"gameactions"
+	{
+		"InGame"		"move"
+	}
+}
+```
+
+```js
+steamApi.startInput(manifestPath, "InGame", ["confirm", "cancel"], ["move"]);
+
+// 매 프레임
+const inputState = steamApi.readInputState();
+const move = inputState.analog.move; // { x, y }, -1 ~ 1, 위가 +y
+```
+
+- 넘긴 아날로그 동작은 `analog` 에 늘 있습니다. 움직이지 않으면 `{ x: 0, y: 0 }` 입니다.
+- 패드가 여럿이면 가장 크게 기운 패드의 값입니다.
+- 값은 스팀이 준 그대로입니다. 스틱은 -1 ~ 1 이고 위가 +y 입니다. (브라우저의 게임패드는 아래가 +y 입니다)
 
 ## 스팀 오버레이 신호
 

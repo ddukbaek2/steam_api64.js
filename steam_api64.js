@@ -4,7 +4,7 @@
 // 스팀 SDK 의 C 함수(flat API, steam_api64.dll)를 koffi 로 직접 부르는 Node.js, Electron 용 모듈입니다.
 // 다른 감싼 라이브러리를 거치지 않으므로 그 라이브러리들이 주지 않던 것도 받습니다.
 //   스팀 신호(콜백)는 수동 디스패치로 이 모듈이 한 곳에서 모두 꺼냅니다. 스팀 오버레이가 열리고 닫히는 신호가 여기서 옵니다.
-//   패드는 Steam Input 의 동작(위, 아래, 확인 같은 것)으로 스팀에게 직접 묻습니다. 스팀덱에서 Proton 위의 Electron(크롬)은
+//   패드는 Steam Input 의 동작(위, 아래, 확인 같은 디지털 동작과 이동, 조준 같은 아날로그 동작)으로 스팀에게 직접 묻습니다. 스팀덱에서 Proton 위의 Electron(크롬)은
 //   스팀이 만든 가상 패드를 보지 못해, 이 길이 아니면 덱의 단추가 게임에 오지 않습니다.
 // 창과 IPC 는 부르는 쪽이 맡습니다. Electron 에서 오버레이를 켜는 일만 enableElectronOverlay 로 함께 둡니다.
 // 시험한 SDK: Steamworks SDK 1.58 ~ 1.60 의 steam_api64.dll
@@ -22,6 +22,8 @@ const INPUT_MAX_COUNT = 16;
 const INPUT_HANDLE_ALL_CONTROLLERS = 0xFFFFFFFFFFFFFFFFn;
 // 플레이스테이션 패드의 Steam Input 종류. (ESteamInputType 의 PS4Controller, PS3Controller, PS5Controller)
 const PLAYSTATION_INPUT_TYPES = [5, 12, 13];
+// 아날로그 동작이 이 길이를 넘으면 그 패드를 쓰고 있는 것으로 봅니다. (isPlayStation 을 고를 때, 스틱이 가만히 있어도 조금 흔들리는 값을 거릅니다)
+const ANALOG_USE_THRESHOLD = 0.25;
 // Electron 에서 오버레이를 덧그리도록 창을 다시 그리게 하는 간격. (밀리초)
 const OVERLAY_REPAINT_MILLISECONDS = 1000 / 60;
 
@@ -39,6 +41,8 @@ let inputActionSetName = "";
 let inputActionSetHandle = 0n;
 let inputActionNames = [];
 let inputActionHandles = [];
+let inputAnalogActionNames = [];
+let inputAnalogActionHandles = [];
 
 
 //==============================================================================
@@ -57,6 +61,13 @@ function declareSteamFunctions(steamLibrary) {
 	});
 	koffi.struct("InputDigitalActionData_t", {
 		state: "bool",
+		active: "bool",
+	});
+	// 헤더는 1 바이트로 맞춰 묶어 13 바이트입니다. 여기서는 끝을 채운 16 바이트로 둡니다. (칸의 자리는 같고, 받는 칸이 스팀이 쓰는 것보다 작아지지 않게)
+	koffi.struct("InputAnalogActionData_t", {
+		mode: "int32_t",
+		x: "float",
+		y: "float",
 		active: "bool",
 	});
 	return {
@@ -92,6 +103,8 @@ function declareSteamFunctions(steamLibrary) {
 		activateActionSet: steamLibrary.func("void SteamAPI_ISteamInput_ActivateActionSet(void *self, uint64_t controller, uint64_t actionSet)"),
 		getDigitalActionHandle: steamLibrary.func("uint64_t SteamAPI_ISteamInput_GetDigitalActionHandle(void *self, const char *actionName)"),
 		getDigitalActionData: steamLibrary.func("InputDigitalActionData_t SteamAPI_ISteamInput_GetDigitalActionData(void *self, uint64_t controller, uint64_t action)"),
+		getAnalogActionHandle: steamLibrary.func("uint64_t SteamAPI_ISteamInput_GetAnalogActionHandle(void *self, const char *actionName)"),
+		getAnalogActionData: steamLibrary.func("InputAnalogActionData_t SteamAPI_ISteamInput_GetAnalogActionData(void *self, uint64_t controller, uint64_t action)"),
 		getInputTypeForHandle: steamLibrary.func("int SteamAPI_ISteamInput_GetInputTypeForHandle(void *self, uint64_t controller)"),
 	};
 }
@@ -295,7 +308,7 @@ function writeCloudFile(fileName, text) {
 
 
 //==============================================================================
-// Steam Input 시작. (동작 정의 파일을 알려 주고, 그 안의 동작 묶음과 디지털 동작을 씁니다)
+// Steam Input 시작. (동작 정의 파일을 알려 주고, 그 안의 동작 묶음과 디지털 동작, 아날로그 동작을 씁니다)
 //
 // 동작 정의 파일(액션 매니페스트)은 게임 폴더에 함께 실린 것을 절대 경로로 알려 줍니다. 그 파일이 패드 종류마다
 // 공식 배치 파일을 가리킵니다. 입력 갱신(RunFrame)은 readInputState() 가 직접 부릅니다.
@@ -304,9 +317,10 @@ function writeCloudFile(fileName, text) {
  * @param { string } manifestPath 동작 정의 파일의 절대 경로.
  * @param { string } actionSetName 동작 묶음 이름.
  * @param { string[] } actionNames 디지털 동작 이름들.
+ * @param { string[] } [analogActionNames] 아날로그 동작 이름들. (동작 정의 파일의 StickPadGyro 나 AnalogTrigger 에 둔 것, 없으면 읽지 않습니다)
  * @returns { boolean } 시작했는지.
  */
-function startInput(manifestPath, actionSetName, actionNames) {
+function startInput(manifestPath, actionSetName, actionNames, analogActionNames) {
 	if (steamFunctions === null) {
 		return false;
 	}
@@ -324,6 +338,10 @@ function startInput(manifestPath, actionSetName, actionNames) {
 	inputActionSetHandle = 0n;
 	inputActionNames = actionNames.slice();
 	inputActionHandles = actionNames.map(() => {
+		return 0n;
+	});
+	inputAnalogActionNames = Array.isArray(analogActionNames) ? analogActionNames.slice() : [];
+	inputAnalogActionHandles = inputAnalogActionNames.map(() => {
 		return 0n;
 	});
 	return true;
@@ -353,14 +371,27 @@ function resolveInputHandles() {
 			isResolved = false;
 		}
 	}
+	for (let analogIndex = 0; analogIndex < inputAnalogActionNames.length; ++analogIndex) {
+		if (inputAnalogActionHandles[analogIndex] !== 0n) {
+			continue;
+		}
+		const analogActionName = inputAnalogActionNames[analogIndex];
+		const analogActionHandle = steamFunctions.getAnalogActionHandle(inputInterface, analogActionName);
+		inputAnalogActionHandles[analogIndex] = BigInt(analogActionHandle);
+		if (inputAnalogActionHandles[analogIndex] === 0n) {
+			isResolved = false;
+		}
+	}
 	return isResolved;
 }
 
 
 //==============================================================================
-// 지금 눌린 동작. (모든 패드를 합칩니다)
+// 지금 눌린 동작과 아날로그 동작의 값. (모든 패드를 합칩니다)
 //
-// { pressed: { 동작 이름: true }, isPlayStation } 이고, isPlayStation 은 누르고 있는 패드가 플레이스테이션 패드인지입니다.
+// { pressed: { 동작 이름: true }, analog: { 동작 이름: { x, y } }, isPlayStation } 이고, isPlayStation 은 쓰고 있는 패드가 플레이스테이션 패드인지입니다.
+// 아날로그 동작은 startInput 에 넘긴 이름마다 늘 있고(움직이지 않으면 0, 0), 여러 패드면 가장 크게 기운 패드의 값입니다.
+// 값은 스팀이 준 그대로입니다. 스틱(joystick_move)은 -1 ~ 1 이고 위가 +y 입니다. 마우스처럼 쓰는 트랙패드는 그 프레임에 움직인 양입니다.
 // Steam Input 을 시작하지 않았으면 null 입니다. 스팀이 그 패드를 Steam Input 으로 넘기지 않으면(PC 에서 사용자가
 // 엑스박스, PS 패드의 Steam Input 을 켜지 않음) 여기는 비고, 그 패드는 크롬의 게임패드 읽기로 들어옵니다.
 //==============================================================================
@@ -372,7 +403,10 @@ function readInputState() {
 		return null;
 	}
 	steamFunctions.inputRunFrame(inputInterface, false);
-	const inputState = { pressed: {}, isPlayStation: false };
+	const inputState = { pressed: {}, analog: {}, isPlayStation: false };
+	for (const analogActionName of inputAnalogActionNames) {
+		inputState.analog[analogActionName] = { x: 0, y: 0 };
+	}
 	const isResolved = resolveInputHandles();
 	if (!isResolved) {
 		return inputState;
@@ -389,6 +423,19 @@ function readInputState() {
 			if (actionData.state) {
 				const actionName = inputActionNames[actionIndex];
 				inputState.pressed[actionName] = true;
+				isControllerPressed = true;
+			}
+		}
+		for (let analogIndex = 0; analogIndex < inputAnalogActionNames.length; ++analogIndex) {
+			const analogActionHandle = inputAnalogActionHandles[analogIndex];
+			const analogData = steamFunctions.getAnalogActionData(inputInterface, controllerHandle, analogActionHandle);
+			const analogLength = Math.hypot(analogData.x, analogData.y);
+			const analogActionName = inputAnalogActionNames[analogIndex];
+			const mergedAnalog = inputState.analog[analogActionName];
+			if (analogLength > Math.hypot(mergedAnalog.x, mergedAnalog.y)) {
+				inputState.analog[analogActionName] = { x: analogData.x, y: analogData.y };
+			}
+			if (analogLength > ANALOG_USE_THRESHOLD) {
 				isControllerPressed = true;
 			}
 		}
