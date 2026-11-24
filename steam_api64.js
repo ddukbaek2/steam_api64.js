@@ -7,8 +7,9 @@
 //   패드는 Steam Input 의 동작(위, 아래, 확인 같은 디지털 동작과 이동, 조준 같은 아날로그 동작)으로 스팀에게 직접 묻습니다. 스팀덱에서 Proton 위의 Electron(크롬)은
 //   스팀이 만든 가상 패드를 보지 못해, 이 길이 아니면 덱의 단추가 게임에 오지 않습니다.
 // 창과 IPC 는 부르는 쪽이 맡습니다. Electron 에서 오버레이를 켜는 일만 enableElectronOverlay 로 함께 둡니다.
-// 시험한 SDK: Steamworks SDK 1.58 ~ 1.60 의 steam_api64.dll
-// (ISteamApps v008, ISteamUtils v010, ISteamUserStats v012, ISteamRemoteStorage v016, ISteamInput v006)
+// SDK: Steamworks SDK 1.65 의 steam_api64.dll (맥은 libsteam_api.dylib)
+// (ISteamApps v009, ISteamUtils v011, ISteamUserStats v013, ISteamRemoteStorage v016, ISteamInput v007, ISteamFriends v018)
+// 인터페이스를 여는 함수의 이름에 판이 들어 있어, 1.60 이하의 DLL 로는 시작하지 못합니다(initSteam 이 던지고 부르는 쪽이 더미로 감).
 //==============================================================================
 "use strict";
 
@@ -22,6 +23,8 @@ const INPUT_MAX_COUNT = 16;
 const INPUT_HANDLE_ALL_CONTROLLERS = 0xFFFFFFFFFFFFFFFFn;
 // 진동 세기의 끝. (ISteamInput::TriggerVibration 의 unsigned short)
 const VIBRATION_SPEED_MAXIMUM = 65535;
+// 스팀 하드웨어의 종류. (ESteamHardwareType 의 차례, readSteamHardware)
+const STEAM_HARDWARE_NAMES = ["none", "steamDeck", "steamMachine", "steamFrame"];
 // 플레이스테이션 패드의 Steam Input 종류. (ESteamInputType 의 PS4Controller, PS3Controller, PS5Controller)
 const PLAYSTATION_INPUT_TYPES = [5, 12, 13];
 // 아날로그 동작이 이 길이를 넘으면 그 패드를 쓰고 있는 것으로 봅니다. (isPlayStation 을 고를 때, 스틱이 가만히 있어도 조금 흔들리는 값을 거릅니다)
@@ -36,6 +39,7 @@ let appsInterface = null;
 let utilsInterface = null;
 let userStatsInterface = null;
 let remoteStorageInterface = null;
+let friendsInterface = null;
 let inputInterface = null;
 let overlayListener = null;
 // Steam Input 의 동작 묶음과 동작. (handle 0 은 스팀이 아직 구성을 읽지 않은 것이라 다음 프레임에 다시 묻습니다)
@@ -80,14 +84,24 @@ function declareSteamFunctions(steamLibrary) {
 		manualDispatchRunFrame: steamLibrary.func("void SteamAPI_ManualDispatch_RunFrame(int32_t steamPipe)"),
 		manualDispatchGetNextCallback: steamLibrary.func("bool SteamAPI_ManualDispatch_GetNextCallback(int32_t steamPipe, _Out_ CallbackMsg_t *message)"),
 		manualDispatchFreeLastCallback: steamLibrary.func("void SteamAPI_ManualDispatch_FreeLastCallback(int32_t steamPipe)"),
-		apps: steamLibrary.func("void *SteamAPI_SteamApps_v008()"),
+		apps: steamLibrary.func("void *SteamAPI_SteamApps_v009()"),
 		getCurrentGameLanguage: steamLibrary.func("const char *SteamAPI_ISteamApps_GetCurrentGameLanguage(void *self)"),
-		utils: steamLibrary.func("void *SteamAPI_SteamUtils_v010()"),
+		utils: steamLibrary.func("void *SteamAPI_SteamUtils_v011()"),
 		getSteamUILanguage: steamLibrary.func("const char *SteamAPI_ISteamUtils_GetSteamUILanguage(void *self)"),
-		userStats: steamLibrary.func("void *SteamAPI_SteamUserStats_v012()"),
-		requestCurrentStats: steamLibrary.func("bool SteamAPI_ISteamUserStats_RequestCurrentStats(void *self)"),
+		isRunningOnSteamHardware: steamLibrary.func("int SteamAPI_ISteamUtils_IsRunningOnSteamHardware(void *self)"),
+		isRunningUnderProton: steamLibrary.func("bool SteamAPI_ISteamUtils_IsRunningUnderProton(void *self)"),
+		userStats: steamLibrary.func("void *SteamAPI_SteamUserStats_v013()"),
 		setAchievement: steamLibrary.func("bool SteamAPI_ISteamUserStats_SetAchievement(void *self, const char *name)"),
+		clearAchievement: steamLibrary.func("bool SteamAPI_ISteamUserStats_ClearAchievement(void *self, const char *name)"),
+		getAchievementAndUnlockTime: steamLibrary.func("bool SteamAPI_ISteamUserStats_GetAchievementAndUnlockTime(void *self, const char *name, _Out_ bool *achieved, _Out_ uint32_t *unlockTime)"),
+		getStatInt32: steamLibrary.func("bool SteamAPI_ISteamUserStats_GetStatInt32(void *self, const char *name, _Out_ int32_t *value)"),
+		getStatFloat: steamLibrary.func("bool SteamAPI_ISteamUserStats_GetStatFloat(void *self, const char *name, _Out_ float *value)"),
+		setStatInt32: steamLibrary.func("bool SteamAPI_ISteamUserStats_SetStatInt32(void *self, const char *name, int32_t value)"),
+		setStatFloat: steamLibrary.func("bool SteamAPI_ISteamUserStats_SetStatFloat(void *self, const char *name, float value)"),
 		storeStats: steamLibrary.func("bool SteamAPI_ISteamUserStats_StoreStats(void *self)"),
+		friends: steamLibrary.func("void *SteamAPI_SteamFriends_v018()"),
+		setRichPresence: steamLibrary.func("bool SteamAPI_ISteamFriends_SetRichPresence(void *self, const char *key, const char *value)"),
+		clearRichPresence: steamLibrary.func("void SteamAPI_ISteamFriends_ClearRichPresence(void *self)"),
 		remoteStorage: steamLibrary.func("void *SteamAPI_SteamRemoteStorage_v016()"),
 		isCloudEnabledForAccount: steamLibrary.func("bool SteamAPI_ISteamRemoteStorage_IsCloudEnabledForAccount(void *self)"),
 		isCloudEnabledForApp: steamLibrary.func("bool SteamAPI_ISteamRemoteStorage_IsCloudEnabledForApp(void *self)"),
@@ -95,7 +109,7 @@ function declareSteamFunctions(steamLibrary) {
 		getFileSize: steamLibrary.func("int32_t SteamAPI_ISteamRemoteStorage_GetFileSize(void *self, const char *fileName)"),
 		fileRead: steamLibrary.func("int32_t SteamAPI_ISteamRemoteStorage_FileRead(void *self, const char *fileName, void *data, int32_t dataSize)"),
 		fileWrite: steamLibrary.func("bool SteamAPI_ISteamRemoteStorage_FileWrite(void *self, const char *fileName, void *data, int32_t dataSize)"),
-		input: steamLibrary.func("void *SteamAPI_SteamInput_v006()"),
+		input: steamLibrary.func("void *SteamAPI_SteamInput_v007()"),
 		inputInit: steamLibrary.func("bool SteamAPI_ISteamInput_Init(void *self, bool explicitlyCallRunFrame)"),
 		inputShutdown: steamLibrary.func("bool SteamAPI_ISteamInput_Shutdown(void *self)"),
 		setInputActionManifestFilePath: steamLibrary.func("bool SteamAPI_ISteamInput_SetInputActionManifestFilePath(void *self, const char *manifestPath)"),
@@ -144,8 +158,8 @@ function initSteam(appId, libraryPath) {
 	utilsInterface = functions.utils();
 	userStatsInterface = functions.userStats();
 	remoteStorageInterface = functions.remoteStorage();
-	// 업적은 스팀이 지금 값을 보내 준 뒤에야 바꿀 수 있습니다. (이 SDK 판은 직접 청해야 합니다)
-	functions.requestCurrentStats(userStatsInterface);
+	friendsInterface = functions.friends();
+	// 업적과 통계의 지금 값은 스팀이 시작할 때 저절로 받아 둡니다. (SDK 1.61 부터, 받기 전에는 읽기와 바꾸기가 실패합니다)
 }
 
 
@@ -233,6 +247,8 @@ function readSteamUiLanguage() {
 
 //==============================================================================
 // 업적 열기. (스팀웍스에 등록한 업적의 API 이름, 열고 스팀에 올렸는지)
+//
+// 스팀이 아직 지금 값을 받지 않았으면(시작 직후) false 이고, 게임이 다음에 다시 열면 됩니다.
 //==============================================================================
 /**
  * @param { string } achievementId
@@ -244,11 +260,187 @@ function unlockAchievement(achievementId) {
 	}
 	const isSet = steamFunctions.setAchievement(userStatsInterface, achievementId);
 	if (!isSet) {
-		// 스팀이 아직 지금 값을 보내 주지 않았습니다. 다시 청해 두고, 게임이 다음에 다시 열면 됩니다.
-		steamFunctions.requestCurrentStats(userStatsInterface);
 		return false;
 	}
 	return steamFunctions.storeStats(userStatsInterface);
+}
+
+
+//==============================================================================
+// 업적 읽기. (열었는지와 연 때)
+//
+// { isAchieved, unlockTime } 이고, unlockTime 은 연 때의 유닉스 시각(초, 열지 않았으면 0)입니다.
+// 스팀에 붙지 않았거나, 스팀이 아직 지금 값을 받지 않았거나(시작 직후), 등록되지 않은 이름이면 null 입니다.
+//==============================================================================
+/**
+ * @param { string } achievementId
+ * @returns { object | null }
+ */
+function readAchievement(achievementId) {
+	if (steamFunctions === null) {
+		return null;
+	}
+	const achieved = [false];
+	const unlockTime = [0];
+	const isRead = steamFunctions.getAchievementAndUnlockTime(userStatsInterface, achievementId, achieved, unlockTime);
+	if (!isRead) {
+		return null;
+	}
+	return { isAchieved: achieved[0] === true, unlockTime: unlockTime[0] };
+}
+
+
+//==============================================================================
+// 업적 지우기. (시험용, 지우고 스팀에 올렸는지)
+//==============================================================================
+/**
+ * @param { string } achievementId
+ * @returns { boolean }
+ */
+function clearAchievement(achievementId) {
+	if (steamFunctions === null) {
+		return false;
+	}
+	const isCleared = steamFunctions.clearAchievement(userStatsInterface, achievementId);
+	if (!isCleared) {
+		return false;
+	}
+	return steamFunctions.storeStats(userStatsInterface);
+}
+
+
+//==============================================================================
+// 통계 읽기. (스팀웍스에 등록한 통계의 API 이름, 정수 통계와 실수 통계)
+//
+// 스팀에 붙지 않았거나, 아직 지금 값을 받지 않았거나, 그 이름과 종류의 통계가 없으면 null 입니다.
+//==============================================================================
+/**
+ * @param { string } statId
+ * @returns { number | null }
+ */
+function readStatInt(statId) {
+	if (steamFunctions === null) {
+		return null;
+	}
+	const value = [0];
+	const isRead = steamFunctions.getStatInt32(userStatsInterface, statId, value);
+	return isRead ? value[0] : null;
+}
+
+/**
+ * @param { string } statId
+ * @returns { number | null }
+ */
+function readStatFloat(statId) {
+	if (steamFunctions === null) {
+		return null;
+	}
+	const value = [0];
+	const isRead = steamFunctions.getStatFloat(userStatsInterface, statId, value);
+	return isRead ? value[0] : null;
+}
+
+
+//==============================================================================
+// 통계 바꾸기. (바꾼 값은 storeStats 로 올립니다, 바꿨는지)
+//
+// 스팀은 올리는 횟수를 막으니 값을 여럿 바꾼 뒤 한 번 올립니다. 업적 열기와 지우기는 스스로 올립니다.
+//==============================================================================
+/**
+ * @param { string } statId
+ * @param { number } value 정수.
+ * @returns { boolean }
+ */
+function setStatInt(statId, value) {
+	if (steamFunctions === null) {
+		return false;
+	}
+	return steamFunctions.setStatInt32(userStatsInterface, statId, Math.trunc(value));
+}
+
+/**
+ * @param { string } statId
+ * @param { number } value
+ * @returns { boolean }
+ */
+function setStatFloat(statId, value) {
+	if (steamFunctions === null) {
+		return false;
+	}
+	return steamFunctions.setStatFloat(userStatsInterface, statId, value);
+}
+
+
+//==============================================================================
+// 바꾼 통계와 업적을 스팀에 올리기. (올렸는지)
+//==============================================================================
+/**
+ * @returns { boolean }
+ */
+function storeStats() {
+	if (steamFunctions === null) {
+		return false;
+	}
+	return steamFunctions.storeStats(userStatsInterface);
+}
+
+
+//==============================================================================
+// 리치 프레즌스. (친구 목록에 보이는 한 줄, 스팀웍스에 등록한 현지화 토큰을 steam_display 로 고릅니다)
+//
+// 열쇠와 값은 스팀웍스의 리치 프레즌스 현지화 파일을 따릅니다. (예: setRichPresence("steam_display", "#Hiding"))
+// 값은 열쇠 하나에 255 바이트, 열쇠는 스무 개까지입니다. 빈 값이면 그 열쇠를 지웁니다.
+//==============================================================================
+/**
+ * @param { string } key
+ * @param { string } value
+ * @returns { boolean } 받아들였는지.
+ */
+function setRichPresence(key, value) {
+	if (steamFunctions === null) {
+		return false;
+	}
+	return steamFunctions.setRichPresence(friendsInterface, key, value);
+}
+
+/**
+ * 리치 프레즌스를 모두 지웁니다.
+ */
+function clearRichPresence() {
+	if (steamFunctions === null) {
+		return;
+	}
+	steamFunctions.clearRichPresence(friendsInterface);
+}
+
+
+//==============================================================================
+// 스팀 하드웨어에서 도는지. ("none", "steamDeck", "steamMachine", "steamFrame", 붙지 않았으면 "none")
+//==============================================================================
+/**
+ * @returns { string }
+ */
+function readSteamHardware() {
+	if (steamFunctions === null) {
+		return STEAM_HARDWARE_NAMES[0];
+	}
+	const hardwareType = steamFunctions.isRunningOnSteamHardware(utilsInterface);
+	const hardwareName = STEAM_HARDWARE_NAMES[hardwareType];
+	return hardwareName === undefined ? STEAM_HARDWARE_NAMES[0] : hardwareName;
+}
+
+
+//==============================================================================
+// 리눅스의 Proton 위에서 도는지. (윈도우 판을 덱이나 리눅스에서 띄운 것)
+//==============================================================================
+/**
+ * @returns { boolean }
+ */
+function isRunningUnderProton() {
+	if (steamFunctions === null) {
+		return false;
+	}
+	return steamFunctions.isRunningUnderProton(utilsInterface);
 }
 
 
@@ -513,7 +705,18 @@ module.exports = {
 	setOverlayListener,
 	readGameLanguage,
 	readSteamUiLanguage,
+	readSteamHardware,
+	isRunningUnderProton,
 	unlockAchievement,
+	readAchievement,
+	clearAchievement,
+	readStatInt,
+	readStatFloat,
+	setStatInt,
+	setStatFloat,
+	storeStats,
+	setRichPresence,
+	clearRichPresence,
 	isCloudEnabled,
 	readCloudFile,
 	writeCloudFile,

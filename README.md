@@ -25,15 +25,14 @@ steam_api64.js 는 스팀 SDK 의 C 함수(flat API)를 [koffi](https://koffi.de
 - **업적, 클라우드, 게임 언어.** 스팀 게임에 흔히 필요한 것을 함께 둡니다.
 - 의존성은 koffi 하나이고, 네이티브 모듈을 Electron 판마다 다시 빌드할 필요가 없습니다. (koffi 는 Node-API 를 씁니다)
 
-찾았다(FOUND YOU)의 스팀 판에서 쓰려고 만들었습니다.
 
 ## 요구 사항
 
-- Windows 64 비트
+- Windows 64 비트, 또는 맥 (SDK 의 `libsteam_api.dylib` 를 `initSteam` 에 넘깁니다)
 - Node.js 16 이상, 또는 Electron (메인 프로세스)
-- 스팀웍스 SDK 의 `redistributable_bin/win64/steam_api64.dll`
+- **스팀웍스 SDK 1.65** 의 `redistributable_bin/win64/steam_api64.dll` (맥은 `redistributable_bin/osx/libsteam_api.dylib`)
   - 이 리포에는 들어 있지 않습니다. 밸브의 약관상 재배포 파일은 게임과 함께만 배포합니다. [스팀웍스 파트너 사이트](https://partner.steamgames.com/downloads/list)에서 SDK 를 받아 꺼내 씁니다.
-  - 시험한 판은 SDK 1.58 ~ 1.60 입니다. (`ISteamApps` v008, `ISteamUtils` v010, `ISteamUserStats` v012, `ISteamRemoteStorage` v016, `ISteamInput` v006) 인터페이스 판이 다른 SDK 의 DLL 은 함수 이름이 달라 읽지 못합니다.
+  - 인터페이스 판: `ISteamApps` v009, `ISteamUtils` v011, `ISteamUserStats` v013, `ISteamRemoteStorage` v016, `ISteamInput` v007, `ISteamFriends` v018. 인터페이스를 여는 함수의 이름에 판이 들어 있어, 판이 다른 SDK 의 DLL(1.60 이하)은 읽지 못하고 `initSteam` 이 던집니다.
 - 스팀 클라이언트가 켜져 있어야 붙습니다.
 
 ## 설치
@@ -108,7 +107,15 @@ steamApi.enableElectronOverlay(app);
 | `setOverlayListener(listener)` | 오버레이가 열리고 닫힐 때 부를 것. (`true` 면 열림) |
 | `readGameLanguage()` | 스팀이 정한 게임 언어. (스팀 API 의 언어 코드) |
 | `readSteamUiLanguage()` | 스팀 화면 언어. 사용자가 스팀 클라이언트에 고른 언어이고, 스팀덱은 기기 설정의 언어입니다. (스팀 API 의 언어 코드) |
-| `unlockAchievement(id)` | 업적을 열고 스팀에 올립니다. 스팀이 아직 지금 값을 보내 주지 않았으면 `false` 이고, 다시 청해 둡니다 |
+| `readSteamHardware()` | 스팀 하드웨어에서 도는지. `"none"`, `"steamDeck"`, `"steamMachine"`, `"steamFrame"` (`ISteamUtils::IsRunningOnSteamHardware`) |
+| `isRunningUnderProton()` | 리눅스의 Proton 위에서 도는지 (덱이나 리눅스에서 윈도우 판을 띄운 것) |
+| `unlockAchievement(id)` | 업적을 열고 스팀에 올립니다. (올렸는지, 시작 직후 스팀이 지금 값을 받기 전이면 `false`) |
+| `readAchievement(id)` | 업적을 열었는지와 연 때. `{ isAchieved, unlockTime }` (`unlockTime` 은 유닉스 시각, 초), 받기 전이거나 없는 이름이면 `null` |
+| `clearAchievement(id)` | 업적을 지우고 스팀에 올립니다. (시험용) |
+| `readStatInt(id)`, `readStatFloat(id)` | 정수 통계, 실수 통계 읽기. (받기 전이거나 없는 이름이면 `null`) |
+| `setStatInt(id, value)`, `setStatFloat(id, value)` | 통계 바꾸기. 올리는 것은 `storeStats()` 로 따로 합니다 |
+| `storeStats()` | 바꾼 통계와 업적을 스팀에 올립니다. (스팀이 올리는 횟수를 막으니 여럿 바꾼 뒤 한 번) |
+| `setRichPresence(key, value)`, `clearRichPresence()` | 친구 목록에 보이는 한 줄. 스팀웍스에 등록한 현지화 토큰을 `steam_display` 로 고릅니다 |
 | `isCloudEnabled()` | 사용자 계정과 이 앱의 스팀 클라우드가 둘 다 켜져 있는지 |
 | `readCloudFile(name)` | 스팀 클라우드의 파일을 UTF-8 글로 읽습니다. (없으면 `null`) |
 | `writeCloudFile(name, text)` | 스팀 클라우드에 UTF-8 글을 씁니다. (썼는지) |
@@ -136,7 +143,7 @@ if (inputState !== null && inputState.pressed.confirm === true) {
 }
 ```
 
-**스팀웍스의 Steam Input 설정은 바꾸지 않아도 됩니다.** `startInput` 이 실행 중에 동작 정의 파일을 스팀에 알리고(`SetInputActionManifestFilePath`), 스팀은 그 파일이 가리키는 공식 배치를 씁니다. 스팀웍스의 기본 컨트롤러 구성을 "게임패드" 템플릿으로 둔 채 스팀덱(Proton)에서 십자키와 A, B 가 이 모듈로 들어오는 것을 확인했습니다. (찾았다, 2026-10-11)
+**스팀웍스의 Steam Input 설정은 바꾸지 않아도 됩니다.** `startInput` 이 실행 중에 동작 정의 파일을 스팀에 알리고(`SetInputActionManifestFilePath`), 스팀은 그 파일이 가리키는 공식 배치를 씁니다. 스팀웍스의 기본 컨트롤러 구성을 "게임패드" 템플릿으로 둔 채 스팀덱(Proton)에서 십자키와 A, B 가 이 모듈로 들어오는 것을 확인했습니다. (2026-10-11)
 
 - 컨트롤러별 Steam Input 사용 칸(Xbox, PlayStation 들)을 비워 두면, PC 의 그 패드는 스팀을 거치지 않고 게임이 직접 읽습니다. 그 패드는 이 모듈로 들어오지 않으니 브라우저의 게임패드 읽기와 함께 씁니다
 - 스팀웍스의 "사용자 지정 구성(게임과 함께 제공)" 으로 같은 파일을 미리 알려 둘 수도 있습니다. 꼭 필요하지는 않습니다
@@ -218,6 +225,30 @@ steamApi.setOverlayListener((isActive) => {
 });
 ```
 
+## 업적과 통계
+
+```js
+// 스팀이 시작할 때 지금 값을 받아 두므로, 시작 직후에는 null 일 수 있습니다. 조금 뒤 다시 읽습니다.
+const escape = steamApi.readAchievement("ACH_ESCAPE");
+if (escape !== null && escape.isAchieved) {
+	unlockBonusMode();
+}
+
+steamApi.setStatInt("NUM_PLAYS", plays);
+steamApi.setStatFloat("BEST_TIME", seconds);
+steamApi.storeStats();
+```
+
+- 이름은 스팀웍스에 등록한 API 이름입니다. 통계는 등록한 종류(정수, 실수)대로 읽고 씁니다.
+- 순위표는 아직 없습니다. (비동기 호출 결과를 받아야 합니다)
+
+## 0.1.x 에서 옮겨 오기
+
+- **SDK 파일을 1.65 로 바꿉니다.** 윈도우는 `steam_api64.dll`, 맥은 `libsteam_api.dylib` 입니다. 1.60 이하의 파일을 그대로 두면 `initSteam` 이 던지고(함수를 찾지 못함), 부르는 쪽이 스팀 없이 도는 쪽으로 갑니다.
+- 함수 이름과 돌려주는 꼴은 0.1.x 와 같습니다. 바꿀 코드는 없습니다.
+- `unlockAchievement` 가 스팀이 값을 받기 전에 다시 청하지 않습니다. SDK 1.61 부터 스팀이 시작할 때 저절로 받기 때문입니다. `false` 가 오면 지금처럼 다음에 다시 부르면 됩니다.
+- 새로 생긴 함수(업적 읽기와 지우기, 통계, 리치 프레즌스, 스팀 하드웨어)는 쓰지 않아도 됩니다.
+
 ## 묶어서 내기
 
 electron-builder 를 쓰면 이렇게 둡니다.
@@ -234,9 +265,9 @@ electron-builder 를 쓰면 이렇게 둡니다.
 
 ## 알려진 제한
 
-- Windows 64 비트만 됩니다. (리눅스, 맥의 SDK 파일 이름과 경로를 다루지 않습니다)
-- 비동기 호출 결과(call result)를 쓰는 함수는 아직 없습니다. 신호는 오버레이 하나만 나눠 주고 나머지는 꺼내서 놓아 줍니다.
-- 업적을 처음 열 때 스팀이 지금 값을 보내 주기 전이면 `false` 입니다. (이 SDK 판은 `RequestCurrentStats` 를 청해야 합니다)
+- 윈도우 64 비트와 맥에서 씁니다. 리눅스 판은 시험하지 않았습니다. SDK 파일의 경로는 부르는 쪽이 넘깁니다.
+- 비동기 호출 결과(call result)를 쓰는 함수(순위표 같은 것)는 아직 없습니다. 신호는 오버레이 하나만 나눠 주고 나머지는 꺼내서 놓아 줍니다.
+- 시작 직후 스팀이 업적과 통계의 지금 값을 받기 전에는 읽기가 `null`, 바꾸기가 `false` 입니다. 조금 뒤 다시 부릅니다.
 
 ## 브랜치와 판
 
