@@ -4,6 +4,7 @@
 - `startInput` 에 아날로그 동작 이름(넷째 값, 넣지 않아도 됨)을 받고, `readInputState` 가 `analog: { 동작 이름: { x, y } }` 를 돌려줍니다. (`ISteamInput::GetAnalogActionHandle`, `GetAnalogActionData`) 탑다운 게임의 이동과 조준처럼 스틱으로 받는 것에 씁니다
 - `isPlayStation` 은 단추를 누른 패드에 더해 스틱을 기울인 패드도 봅니다
 - 앱 480 으로 붙어 Steam Input 시작과 아날로그 읽기가 오류 없이 도는 것은 봤습니다(2026-11-09, 패드 없이). 실제 패드로 값이 들어오는 것을 본 뒤에 판을 냅니다
+- `triggerVibration(leftSpeed, rightSpeed)`: Steam Input 으로 받는 모든 패드를 떨게 합니다(`ISteamInput::TriggerVibration`). 세기는 0 ~ 1 이고, 다시 부를 때까지 떨므로 멈출 때는 `0, 0` 으로 부릅니다. 찾았다(FOUND YOU)의 패드 진동에서 씁니다. 실제 패드와 스팀덱에서 떨리는 것을 본 뒤에 판을 냅니다
 
 # 0.1.2 (2026-11-01)
 - `readSteamUiLanguage`: 스팀 화면 언어(`ISteamUtils::GetSteamUILanguage`)를 읽습니다. 스팀은 게임을 깔 때 게임마다의 언어 칸에 영어를 적어 두어, 게임 언어(`readGameLanguage`)가 스팀 화면 언어와 달리 영어로 오는 일이 많습니다. 사용자의 언어를 알고 싶으면 이것을 봅니다

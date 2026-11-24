@@ -20,6 +20,8 @@ const ERROR_MESSAGE_SIZE = 1024;
 const INPUT_MAX_COUNT = 16;
 // 모든 패드에 한꺼번에. (STEAM_INPUT_HANDLE_ALL_CONTROLLERS)
 const INPUT_HANDLE_ALL_CONTROLLERS = 0xFFFFFFFFFFFFFFFFn;
+// 진동 세기의 끝. (ISteamInput::TriggerVibration 의 unsigned short)
+const VIBRATION_SPEED_MAXIMUM = 65535;
 // 플레이스테이션 패드의 Steam Input 종류. (ESteamInputType 의 PS4Controller, PS3Controller, PS5Controller)
 const PLAYSTATION_INPUT_TYPES = [5, 12, 13];
 // 아날로그 동작이 이 길이를 넘으면 그 패드를 쓰고 있는 것으로 봅니다. (isPlayStation 을 고를 때, 스틱이 가만히 있어도 조금 흔들리는 값을 거릅니다)
@@ -106,6 +108,7 @@ function declareSteamFunctions(steamLibrary) {
 		getAnalogActionHandle: steamLibrary.func("uint64_t SteamAPI_ISteamInput_GetAnalogActionHandle(void *self, const char *actionName)"),
 		getAnalogActionData: steamLibrary.func("InputAnalogActionData_t SteamAPI_ISteamInput_GetAnalogActionData(void *self, uint64_t controller, uint64_t action)"),
 		getInputTypeForHandle: steamLibrary.func("int SteamAPI_ISteamInput_GetInputTypeForHandle(void *self, uint64_t controller)"),
+		triggerVibration: steamLibrary.func("void SteamAPI_ISteamInput_TriggerVibration(void *self, uint64_t controller, uint16_t leftSpeed, uint16_t rightSpeed)"),
 	};
 }
 
@@ -449,6 +452,34 @@ function readInputState() {
 
 
 //==============================================================================
+// 패드 진동. (Steam Input 으로 받는 모든 패드의 왼쪽, 오른쪽 모터)
+//
+// 세기는 0 ~ 1 이고 스팀에는 0 ~ 65535 로 넘깁니다(ISteamInput::TriggerVibration). 왼쪽은 무겁고 느린 모터, 오른쪽은 가볍고 빠른
+// 모터입니다. 스팀은 다시 부를 때까지 그 세기로 떨게 두므로, 멈추려면 0, 0 으로 부릅니다. Steam Input 을 거치지 않는 패드
+// (PC 에서 사용자가 엑스박스 패드의 Steam Input 을 켜지 않음)는 여기로 떨리지 않고, 브라우저의 게임패드 진동으로 떨립니다.
+//==============================================================================
+/**
+ * @param { number } leftSpeed 0 ~ 1.
+ * @param { number } rightSpeed 0 ~ 1.
+ * @returns { boolean } 떨게 한 패드가 있는지.
+ */
+function triggerVibration(leftSpeed, rightSpeed) {
+	if (steamFunctions === null || inputInterface === null) {
+		return false;
+	}
+	const leftValue = Math.round(Math.max(0, Math.min(1, leftSpeed)) * VIBRATION_SPEED_MAXIMUM);
+	const rightValue = Math.round(Math.max(0, Math.min(1, rightSpeed)) * VIBRATION_SPEED_MAXIMUM);
+	const controllerHandles = Buffer.alloc(8 * INPUT_MAX_COUNT);
+	const controllerCount = steamFunctions.getConnectedControllers(inputInterface, controllerHandles);
+	for (let controllerIndex = 0; controllerIndex < controllerCount; ++controllerIndex) {
+		const controllerHandle = controllerHandles.readBigUInt64LE(controllerIndex * 8);
+		steamFunctions.triggerVibration(inputInterface, controllerHandle, leftValue, rightValue);
+	}
+	return controllerCount > 0;
+}
+
+
+//==============================================================================
 // Electron 에서 스팀 오버레이 켜기. (앱이 준비되기 전에 부릅니다)
 //
 // 스팀 오버레이는 게임의 그리기에 덧그려집니다. 크롬이 GPU 를 따로 돌리거나 다이렉트 컴포지션으로 합성하면 오버레이가 끼어들
@@ -488,5 +519,6 @@ module.exports = {
 	writeCloudFile,
 	startInput,
 	readInputState,
+	triggerVibration,
 	enableElectronOverlay,
 };

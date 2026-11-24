@@ -114,6 +114,7 @@ steamApi.enableElectronOverlay(app);
 | `writeCloudFile(name, text)` | 스팀 클라우드에 UTF-8 글을 씁니다. (썼는지) |
 | `startInput(manifestPath, actionSetName, actionNames, analogActionNames)` | Steam Input 을 시작하고 동작 정의 파일을 알립니다. 아날로그 동작 이름은 넣지 않아도 됩니다 |
 | `readInputState()` | 지금 눌린 동작과 아날로그 동작의 값. `{ pressed: { 동작 이름: true }, analog: { 동작 이름: { x, y } }, isPlayStation }` (시작하지 않았으면 `null`) |
+| `triggerVibration(leftSpeed, rightSpeed)` | Steam Input 으로 받는 모든 패드를 떨게 합니다. 세기는 0 ~ 1 이고, 다시 부를 때까지 떨므로 멈추려면 `0, 0` 으로 부릅니다. (떨게 한 패드가 있는지) |
 | `enableElectronOverlay(app)` | Electron 에서 오버레이 켜기. (앱이 준비되기 전) |
 
 ## Steam Input
@@ -191,6 +192,19 @@ const move = inputState.analog.move; // { x, y }, -1 ~ 1, 위가 +y
 - 넘긴 아날로그 동작은 `analog` 에 늘 있습니다. 움직이지 않으면 `{ x: 0, y: 0 }` 입니다.
 - 패드가 여럿이면 가장 크게 기운 패드의 값입니다.
 - 값은 스팀이 준 그대로입니다. 스틱은 -1 ~ 1 이고 위가 +y 입니다. (브라우저의 게임패드는 아래가 +y 입니다)
+
+### 진동
+
+```js
+// 0.2 초 동안 세게 떱니다. (왼쪽은 무거운 모터, 오른쪽은 가벼운 모터)
+steamApi.triggerVibration(1, 1);
+setTimeout(() => {
+	steamApi.triggerVibration(0, 0);
+}, 200);
+```
+
+- 스팀은 다시 부를 때까지 그 세기로 떨게 둡니다. 시간은 부르는 쪽이 재고 `0, 0` 으로 멈춥니다.
+- Steam Input 을 거치지 않는 패드는 여기로 떨리지 않습니다. 그 패드는 브라우저(Electron)의 게임패드로 들어오므로 `gamepad.vibrationActuator.playEffect("dual-rumble", ...)` 로 떨게 합니다.
 
 ## 스팀 오버레이 신호
 
